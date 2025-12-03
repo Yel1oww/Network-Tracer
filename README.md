@@ -15,7 +15,7 @@ Comprehensive Reporting: Generates an easy-to-read report with open ports per ho
 Prerequisites
 Python: Version 3.6 or higher
 Operating Systems: Linux, macOS, or Windows
-Libraries: Uses standard Python libraries (socket, ipaddress, threading, time) — no external dependencies required
+Libraries: Uses standard Python libraries (socket, ipaddress, time, etc...) — no external dependencies required
 
 ---
 
