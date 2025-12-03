@@ -147,10 +147,7 @@ if start_port > end_port or start_port < 1 or end_port > 65535:
     exit()
 
 # Max concurrency recommendations
-print(f"\nMax concurrency recommendations (Influences speed but costs ram and network usage):")
-print(f"\n- 4GB RAM → 1000 Concurrency")
-print(f"- 8GB RAM → 2000 Concurrency")
-print(f"- 16GB RAM or more → 3000 Concurrency\n")
+print(f"\nConcurrency recommendation is something between 1000 (Slower) and 5000 (Faster) (Influences speed but costs ram and network usage)\n")
 
 # Let user directly input max concurrency
 while True:
