@@ -7,12 +7,9 @@ import time
 LOCAL_TIMEOUT = 1
 INTERNET_TIMEOUT = 2
 
-# Limit how many concurrent scans happen at once
-MAX_CONCURRENT = 1200
-
 # Store results
 open_ports_results = {}
-semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+semaphore = None
 
 # Progress tracking
 progress = {
@@ -81,7 +78,7 @@ async def scan_host(ip, start_port, end_port, timeout):
             queue.task_done()
 
     workers = []
-    for _ in range(MAX_CONCURRENT):
+    for _ in range(semaphore._value):  # Set number of workers based on max concurrency
         workers.append(asyncio.create_task(worker()))
 
     await queue.join()
@@ -149,10 +146,30 @@ if start_port > end_port or start_port < 1 or end_port > 65535:
     print("Invalid port range.")
     exit()
 
+# Max concurrency recommendations
+print(f"\nMax concurrency recommendations (Influences speed but costs ram and network usage):")
+print(f"\n- 4GB RAM → 1000 Concurrency")
+print(f"- 8GB RAM → 2000 Concurrency")
+print(f"- 16GB RAM or more → 3000 Concurrency\n")
+
+# Let user directly input max concurrency
+while True:
+    try:
+        max_concurrency = int(input("Enter max concurrency: "))
+        if max_concurrency < 1:
+            print("Concurrency must be greater than 0.")
+        else:
+            break
+    except ValueError:
+        print("Please enter a valid number.")
+
+# Set max concurrency and semaphore
+semaphore = asyncio.Semaphore(max_concurrency)
+
 progress["total"] = len(target_ips) * (end_port - start_port + 1)
 
 print(f"\nScanning {len(target_ips)} host(s), ports {start_port}-{end_port}")
-print(f"Max concurrency: {MAX_CONCURRENT}\n")
+print(f"Max concurrency: {max_concurrency}\n")
 
 update_progress()
 
