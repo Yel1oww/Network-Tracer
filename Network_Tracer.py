@@ -1,53 +1,55 @@
-import socket
+import asyncio
 import ipaddress
-import threading
+import socket
 import time
 
-# Results are stored here
+# Timeout settings (seconds)
+LOCAL_TIMEOUT = 1
+INTERNET_TIMEOUT = 2
+
+# Limit how many concurrent scans happen at once
+MAX_CONCURRENT = 1000
+
+# Store results
 open_ports_results = {}
-
-# Ensures that only one thread can modify at a time preventing corruption
-results_lock = threading.Lock()
-
-# Ensures that output from different threads doesn't overlap
-print_lock = threading.Lock()
-
-# Define timeout constants
-LOCAL_TIMEOUT = 1 # Shorter timeout for fast local networks
-INTERNET_TIMEOUT = 2 # Longer timeout for slower Internet scans
+semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
 
-# Scanning Function
-def port_scan(ip, port, timeout):
+async def scan_port(ip, port, timeout):
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(timeout)
-        
-        result = s.connect_ex((ip, port))
-        
-        if result == 0:
-            service_name = "Unknown"
+        async with semaphore:
+            conn = asyncio.open_connection(ip, port)
+            reader, writer = await asyncio.wait_for(conn, timeout=timeout)
+
             try:
-                service_name = socket.getservbyport(port, 'tcp')
-            except OSError:
-                pass
-            
+                service_name = socket.getservbyport(port, "tcp")
+            except:
+                service_name = "unknown"
+
             port_info = f"{port} ({service_name.upper()})"
-            
-            with print_lock:
-                print(f"[{ip}] Port {port}: Open") 
-                
-            with results_lock:
-                if ip not in open_ports_results:
-                    open_ports_results[ip] = []
-                open_ports_results[ip].append(port_info)
-        
-        s.close()
-        
-    except Exception:
+
+            if ip not in open_ports_results:
+                open_ports_results[ip] = []
+
+            open_ports_results[ip].append(port_info)
+            print(f"[{ip}] Port {port}: OPEN")
+
+            writer.close()
+            await writer.wait_closed()
+
+    except:
         pass
-    
-# ASCII Art Banner
+
+
+async def scan_host(ip, start_port, end_port, timeout):
+    tasks = []
+
+    for port in range(start_port, end_port + 1):
+        tasks.append(asyncio.create_task(scan_port(ip, port, timeout)))
+
+    await asyncio.gather(*tasks)
+
+
 def print_banner():
     banner = r"""
  _   _      _                      _      _____                       
@@ -59,86 +61,89 @@ def print_banner():
 """
     print(banner)
 
-# Input Handling
+
+# ------------------ MAIN ------------------
+
 print_banner()
-print("Welcome to Network Tracer (TCP Scanner), what ip or ip range do you want me to scan?")
-target_input = input("Enter Target IP or IP range (e.g., 192.168.1.1 or 192.168.1.0/24): ")
+print("Welcome to Network Tracer")
+
+target_input = input(
+    "Enter Target IP or IP range (e.g., 192.168.1.1 or 192.168.1.0/24): "
+).strip()
 
 while True:
-    network_choice = input("Select scan type:\n1) Local network scan\n2) Internet/External scan\nEnter choice: ")
-    
-    if network_choice == '1':
+    network_choice = input(
+        "Select scan type:\n1) Local network scan\n2) Internet/External scan\nEnter choice: "
+    )
+
+    if network_choice == "1":
         scan_timeout = LOCAL_TIMEOUT
-        print(f"Set scan timeout to {scan_timeout} seconds.")
         break
-    elif network_choice == '2':
+    elif network_choice == "2":
         scan_timeout = INTERNET_TIMEOUT
-        print(f"Set scan timeout to {scan_timeout} seconds.")
         break
     else:
-        print("Invalid choice. Please enter '1' for Local or '2' for Internet.")
+        print("Invalid choice. Please enter 1 or 2.")
 
+# Validate targets
 try:
-    if '/' in target_input:
+    if "/" in target_input:
         network = ipaddress.ip_network(target_input, strict=False)
-        target_ips = [str(ip) for ip in network.hosts()] 
+        target_ips = [str(ip) for ip in network.hosts()]
     else:
         ipaddress.ip_address(target_input)
         target_ips = [target_input]
-
 except ValueError:
-    print("Invalid IP address or network range format. Exiting.")
+    print("Invalid IP or network.")
     exit()
 
+# Ports
 try:
     start_port = int(input("Enter Start Port: "))
     end_port = int(input("Enter End Port: "))
 except ValueError:
-    print("Invalid input. Ports must be numbers. Exiting.")
+    print("Ports must be numbers.")
     exit()
 
 if start_port > end_port or start_port < 1 or end_port > 65535:
-    print("Invalid port range. Exiting.")
+    print("Invalid port range.")
     exit()
 
-# Scan Execution
-print(f"\nStarting TCP scan for target: {target_input} ({len(target_ips)} host(s))")
-print(f"Scanning ports {start_port} through {end_port}...")
+print(f"\nScanning {len(target_ips)} host(s), ports {start_port}-{end_port}")
 
 start_time = time.time()
 
-threads = []
+async def main():
+    jobs = []
+    for ip in target_ips:
+        jobs.append(
+            asyncio.create_task(scan_host(ip, start_port, end_port, scan_timeout))
+        )
+    await asyncio.gather(*jobs)
 
-for ip in target_ips:
-    for port in range(start_port, end_port + 1):
-        thread = threading.Thread(target=port_scan, args=(ip, port, scan_timeout))
-        threads.append(thread)
-        thread.start()
 
 try:
-    for thread in threads:
-        thread.join()
+    asyncio.run(main())
 except KeyboardInterrupt:
-    print("\nScan interrupted by user.")
+    print("\nScan interrupted.")
 
 
 # Final Report
-end_time = time.time()
-total_time = end_time - start_time
+total_time = time.time() - start_time
 total_open_ports = sum(len(ports) for ports in open_ports_results.values())
 
-print("\n" + "="*50)
-print(f"✅ TCP Scan finished in {total_time:.2f} seconds.")
-print(f"Summary: Found {total_open_ports} open port(s) across {len(open_ports_results)} host(s).")
-print("="*50)
-print("")
+print("\n" + "=" * 50)
+print(f"✅ Scan finished in {total_time:.2f} seconds")
+print(f"✅ Found {total_open_ports} open port(s) on {len(open_ports_results)} host(s)")
+print("=" * 50)
 
 if open_ports_results:
     for ip, ports in open_ports_results.items():
-        print(f"Host: {ip}")
-        print(f"  Open Ports: {', '.join(sorted(ports))}") 
-        print() 
+        print(f"\nHost: {ip}")
+        print(f"  Open Ports: {', '.join(sorted(ports))}")
+        print("")
 else:
-    print("No open ports found in the specified range.")
+    print("\nNo open ports found.")
+    print("")
 
-print("="*50)
+print("=" * 50)
