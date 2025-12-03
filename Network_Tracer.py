@@ -8,11 +8,34 @@ LOCAL_TIMEOUT = 1
 INTERNET_TIMEOUT = 2
 
 # Limit how many concurrent scans happen at once
-MAX_CONCURRENT = 500
+MAX_CONCURRENT = 1200
 
 # Store results
 open_ports_results = {}
 semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+
+# Progress tracking
+progress = {
+    "total": 0,
+    "scanned": 0
+}
+
+# Lock for progress updating
+progress_lock = asyncio.Lock()
+
+
+def update_progress():
+    percent = (progress["scanned"] / progress["total"]) * 100
+    bar_length = 30
+    filled = int(percent / 100 * bar_length)
+    bar = "█" * filled + "-" * (bar_length - filled)
+
+    print(
+        f"\rProgress: |{bar}| {percent:6.2f}% "
+        f"({progress['scanned']}/{progress['total']})",
+        end="",
+        flush=True
+    )
 
 
 async def scan_port(ip, port, timeout):
@@ -32,7 +55,6 @@ async def scan_port(ip, port, timeout):
                 open_ports_results[ip] = []
 
             open_ports_results[ip].append(port_info)
-            print(f"[{ip}] Port {port}: OPEN")
 
             writer.close()
             await writer.wait_closed()
@@ -40,11 +62,15 @@ async def scan_port(ip, port, timeout):
     except:
         pass
 
+    # Update progress
+    async with progress_lock:
+        progress["scanned"] += 1
+        update_progress()
+
 
 async def scan_host(ip, start_port, end_port, timeout):
     queue = asyncio.Queue()
 
-    # Add all ports to the queue (lightweight — no tasks yet)
     for port in range(start_port, end_port + 1):
         await queue.put(port)
 
@@ -54,9 +80,8 @@ async def scan_host(ip, start_port, end_port, timeout):
             await scan_port(ip, port, timeout)
             queue.task_done()
 
-    # Create limited amount of workers
     workers = []
-    for _ in range(500):  # 500 = safe & fast
+    for _ in range(MAX_CONCURRENT):
         workers.append(asyncio.create_task(worker()))
 
     await queue.join()
@@ -124,9 +149,15 @@ if start_port > end_port or start_port < 1 or end_port > 65535:
     print("Invalid port range.")
     exit()
 
+progress["total"] = len(target_ips) * (end_port - start_port + 1)
+
 print(f"\nScanning {len(target_ips)} host(s), ports {start_port}-{end_port}")
+print(f"Max concurrency: {MAX_CONCURRENT}\n")
+
+update_progress()
 
 start_time = time.time()
+
 
 async def main():
     jobs = []
@@ -137,17 +168,13 @@ async def main():
     await asyncio.gather(*jobs)
 
 
-try:
-    asyncio.run(main())
-except KeyboardInterrupt:
-    print("\nScan interrupted.")
-
+asyncio.run(main())
 
 # Final Report
 total_time = time.time() - start_time
 total_open_ports = sum(len(ports) for ports in open_ports_results.values())
 
-print("\n" + "=" * 50)
+print("\n\n" + "=" * 50)
 print(f"✅ Scan finished in {total_time:.2f} seconds")
 print(f"✅ Found {total_open_ports} open port(s) on {len(open_ports_results)} host(s)")
 print("=" * 50)
@@ -156,9 +183,7 @@ if open_ports_results:
     for ip, ports in open_ports_results.items():
         print(f"\nHost: {ip}")
         print(f"  Open Ports: {', '.join(sorted(ports))}")
-        print("")
 else:
     print("\nNo open ports found.")
-    print("")
 
-print("=" * 50)
+print("\n" + "=" * 50)
