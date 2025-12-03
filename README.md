@@ -1,10 +1,8 @@
-Network Tracer: Multi-threaded TCP Port Scanner
+Network Tracer: TCP Port Scanner
 
-Network Tracer is a TCP port scanner built in Python. It leverages multi-threading to perform concurrent connection attempts, drastically reducing scan time for large networks and port ranges.
+Network Tracer is a TCP port scanner built in Python.
 
 Key Features
-
-Multi-threaded Scanning: Utilizes Python's threading module to run connection checks simultaneously, ensuring high-speed operation.
 
 IP Range Support: Supports scanning single IP addresses or entire network ranges specified using CIDR notation (e.g., 192.168.1.0/24).
 
