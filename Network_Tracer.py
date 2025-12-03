@@ -8,7 +8,7 @@ LOCAL_TIMEOUT = 1
 INTERNET_TIMEOUT = 2
 
 # Limit how many concurrent scans happen at once
-MAX_CONCURRENT = 1000
+MAX_CONCURRENT = 500
 
 # Store results
 open_ports_results = {}
@@ -42,12 +42,27 @@ async def scan_port(ip, port, timeout):
 
 
 async def scan_host(ip, start_port, end_port, timeout):
-    tasks = []
+    queue = asyncio.Queue()
 
+    # Add all ports to the queue (lightweight — no tasks yet)
     for port in range(start_port, end_port + 1):
-        tasks.append(asyncio.create_task(scan_port(ip, port, timeout)))
+        await queue.put(port)
 
-    await asyncio.gather(*tasks)
+    async def worker():
+        while not queue.empty():
+            port = await queue.get()
+            await scan_port(ip, port, timeout)
+            queue.task_done()
+
+    # Create limited amount of workers
+    workers = []
+    for _ in range(500):  # 500 = safe & fast
+        workers.append(asyncio.create_task(worker()))
+
+    await queue.join()
+
+    for w in workers:
+        w.cancel()
 
 
 def print_banner():
