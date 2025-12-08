@@ -1,10 +1,10 @@
-Network Tracer: TCP Port Scanner
+# Network Tracer: TCP Port Scanner
 
 Network Tracer is a Python-based TCP port scanner that helps you discover open ports and identify common services on single IPs or entire network ranges.
 
 ---
 
-Key Features
+# Key Features
 
 IP Range Support: Scan single IP addresses or entire network ranges using CIDR notation (e.g., 192.168.1.0/24).
 Service Identification: Attempts to identify common services (HTTP, SSH, FTP, etc.) running on open ports.
@@ -12,14 +12,14 @@ Comprehensive Reporting: Generates an easy-to-read report with open ports per ho
 
 ---
 
-Prerequisites
+# Prerequisites
 Python: Version 3.6 or higher
 Operating Systems: Linux, macOS, or Windows
 Libraries: Uses standard Python libraries (socket, ipaddress, time, etc...) — no external dependencies required
 
 ---
 
-Installation
+# Installation
 
 Clone the repository:
 git clone https://github.com/Yel1oww/Network-Tracer
@@ -30,7 +30,7 @@ python3 network_tracer.py
 
 ---
 
-Usage
+# Usage
 
 Simply run the script and follow the prompts to scan a single IP or a network range. The script will output:
 Open ports for each host
@@ -39,8 +39,6 @@ Total scan duration
 
 ---
 
-License
+# License
 
 This project is licensed under the MIT License. See the LICENSE file for details.
-
----
